@@ -6,6 +6,14 @@
     "singleQuote": true,
     "overrides": [
         {
+            "files": "*.yaml",
+            "options": {
+                "tabWidth": 2,
+                "useTabs": false,
+                "semi": true
+            }
+        },
+        {
             "files": "*.json",
             "options": {
                 "tabWidth": 2,
