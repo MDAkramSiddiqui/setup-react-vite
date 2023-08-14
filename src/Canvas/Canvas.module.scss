@@ -1,12 +1,13 @@
 $height: 418;
 $width: 836;
 
-.container {
-    padding: 40px;
-    position: relative;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
+.canvas {
+    display: block;
+    object-fit: contain;
+    height: #{$height}px;
+    width: #{$width}px;
+    border: 1px solid rgba(black, 0.2);
+    border-radius: 10px;
 }
 
 .button {
