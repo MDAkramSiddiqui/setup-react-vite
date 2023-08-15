@@ -32,8 +32,8 @@ interface ITransformationState {
 }
 
 export interface ICanvasApi {
-    moveLeft: () => void;
-    moveRight: () => void;
+    move: (x: number, y: number) => void;
+    reset: () => void;
 }
 
 enum TransformationActions {
@@ -42,8 +42,6 @@ enum TransformationActions {
     UPDATE_TRANSLATE = 'UPDATE_TRANSLATE',
     RESET_MATRIX = 'RESET_MATRIX',
 }
-
-const TRANSLATE_STEP = 10;
 
 interface ITransformationAction {
     type: TransformationActions;
@@ -86,8 +84,8 @@ const transformationReducer = (
         case TransformationActions.RESET_MATRIX:
             return {
                 ...state,
-                aScaleX: 1,
-                dScaleY: 1,
+                aScaleX: action.payload.scaleX ?? 1,
+                dScaleY: action.payload.scaleY ?? 1,
                 bSkeyX: 0,
                 cSkeyY: 0,
                 eTranslateX: 0,
@@ -146,23 +144,40 @@ const Canvas = forwardRef<ICanvasApi, IProps>(
         useImperativeHandle(
             ref,
             () => ({
-                moveLeft: () => {
+                move: (x: number, y: number) => {
+                    const [scaledUpWidth, scaledUpHeight] = [
+                        canvasDimensions.width * zoomScale,
+                        canvasDimensions.height * zoomScale,
+                    ];
+
+                    const newX = x + transformationState.eTranslateX;
+                    const translateX =
+                        newX < 0 &&
+                        scaledUpWidth + newX > canvasDimensions.width
+                            ? newX
+                            : transformationState.eTranslateX;
+
+                    const newY = y + transformationState.fTranslateY;
+                    const translateY =
+                        newY < 0 &&
+                        scaledUpHeight + newY > canvasDimensions.height
+                            ? newY
+                            : transformationState.fTranslateY;
+
                     dispatchTransformation({
                         type: TransformationActions.UPDATE_TRANSLATE,
                         payload: {
-                            translateX:
-                                transformationState.eTranslateX -
-                                TRANSLATE_STEP,
+                            translateX,
+                            translateY,
                         },
                     });
                 },
-                moveRight: () => {
+                reset: () => {
                     dispatchTransformation({
-                        type: TransformationActions.UPDATE_TRANSLATE,
+                        type: TransformationActions.RESET_MATRIX,
                         payload: {
-                            translateX:
-                                transformationState.eTranslateX +
-                                TRANSLATE_STEP,
+                            scaleX: ratio * dpRatio * zoomScale,
+                            scaleY: ratio * dpRatio * zoomScale,
                         },
                     });
                 },
@@ -242,7 +257,8 @@ const Canvas = forwardRef<ICanvasApi, IProps>(
                         box.x * zoomScale +
                         transformationState.eTranslateX / dpRatio;
                     const y =
-                        box.y * zoomScale + transformationState.fTranslateY;
+                        box.y * zoomScale +
+                        transformationState.fTranslateY / dpRatio;
                     const width = box.width * zoomScale;
                     const height = box.height * zoomScale;
 

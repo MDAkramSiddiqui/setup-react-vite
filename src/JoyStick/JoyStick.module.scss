@@ -1,0 +1,38 @@
+@use 'sass:math';
+
+$height: 150;
+$width: 150;
+$controllerHeight: 50;
+$controllerWidth: 50;
+
+.container {
+    width: #{$width}px;
+    height: #{$height}px;
+    border-radius: 50%;
+    background-color: #fff;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(black, 0.2);
+}
+
+.controller {
+    left: #{math.div($width, 2)}px;
+    top: #{math.div($height, 2)}px;
+    transform: translate(
+        #{math.div(-$controllerWidth, 2)}px,
+        #{math.div(-$controllerHeight, 2)}px
+    );
+    width: #{$controllerWidth}px;
+    height: #{$controllerHeight}px;
+    background-color: #3498db;
+    border-radius: 50%;
+    position: absolute;
+    cursor: grab;
+}
+
+:export {
+    containerHeight: $height;
+    containerWidth: $width;
+    controllerHeight: $controllerHeight;
+    controllerWidth: $controllerWidth;
+}

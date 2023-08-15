@@ -1,9 +1,13 @@
+// libs
 import { useRef, useState } from 'react';
 import cx from 'classnames';
 
 // styles
 import styles from './App.module.scss';
+
+// widgets
 import Canvas, { ICanvasApi } from './Canvas/Canvas';
+import JoyStick from './JoyStick/JoyStick';
 
 function App() {
     const dpRatio = window.devicePixelRatio || 1;
@@ -31,12 +35,13 @@ function App() {
         });
     };
 
-    const handleMoveLeft = () => {
-        canvasRef.current?.moveLeft();
+    const handeJoyStickMove = (x: number, y: number) => {
+        canvasRef.current?.move(x / 10, y / 10);
     };
 
-    const handleMoveRight = () => {
-        canvasRef.current?.moveRight();
+    const reset = () => {
+        setZoomScale(1);
+        canvasRef.current?.reset();
     };
 
     return (
@@ -60,17 +65,12 @@ function App() {
                 zoom out
             </button>
             <button
-                className={cx(styles.button, styles.buttonMoveLeft)}
-                onClick={handleMoveLeft}
+                className={cx(styles.button, styles.buttonReset)}
+                onClick={reset}
             >
-                {'<'}
+                reset
             </button>
-            <button
-                className={cx(styles.button, styles.buttonMoveRight)}
-                onClick={handleMoveRight}
-            >
-                {'>'}
-            </button>
+            <JoyStick onMove={handeJoyStickMove} />
         </div>
     );
 }
