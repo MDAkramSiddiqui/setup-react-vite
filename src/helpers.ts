@@ -1,5 +1,5 @@
-export const BOX_HEIGHT = 15;
-export const BOX_WIDTH = 15;
+export const BOX_HEIGHT = 20;
+export const BOX_WIDTH = 20;
 export const GAP = 10;
 const MARGIN_ERROR = 0.000099;
 
