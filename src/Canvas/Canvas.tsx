@@ -42,6 +42,7 @@ enum TransformationActions {
     UPDATE_SKEW = 'UPDATE_SKEW',
     UPDATE_TRANSLATE = 'UPDATE_TRANSLATE',
     RESET_MATRIX = 'RESET_MATRIX',
+    DISPATCH_MULTIPLE = 'DISPATCH_MULTIPLE',
 }
 
 interface ITransformationAction {
@@ -82,6 +83,17 @@ const transformationReducer = (
                 fTranslateY: action.payload.translateY ?? state.fTranslateY,
             };
 
+        case TransformationActions.DISPATCH_MULTIPLE:
+            return {
+                ...state,
+                aScaleX: action.payload.scaleX ?? state.aScaleX,
+                dScaleY: action.payload.scaleY ?? state.dScaleY,
+                bSkeyX: action.payload.skewX ?? state.bSkeyX,
+                cSkeyY: action.payload.skewY ?? state.cSkeyY,
+                eTranslateX: action.payload.translateX ?? state.eTranslateX,
+                fTranslateY: action.payload.translateY ?? state.fTranslateY,
+            };
+
         case TransformationActions.RESET_MATRIX:
             return {
                 ...state,
@@ -95,15 +107,14 @@ const transformationReducer = (
     }
 };
 
-const MAX_ZOOM_SCALE = 5;
+const MAX_ZOOM_SCALE = 15;
 const MIN_ZOOM_SCALE = 1;
-const ZOOM_STEP = 1;
-const ANIMATION_ZOOM_STEP = 0.1;
+const ZOOM_STEP = 0.1;
 
 const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const currentBoxRef = useRef<number>(0);
-    const called = useRef<boolean>(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
 
     const [canvasDimensions, setCanvasDimensions] = useState({
         height: Number(styles.canvasHeight),
@@ -113,8 +124,8 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
     const [transformationState, dispatchTransformation] = useReducer(
         transformationReducer,
         {
-            aScaleX: 1,
-            dScaleY: 1,
+            aScaleX: dpRatio,
+            dScaleY: dpRatio,
             bSkeyX: 0,
             cSkeyY: 0,
             eTranslateX: 0,
@@ -124,52 +135,142 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
 
     const [zoomScale, setZoomScale] = useState<number>(1);
 
-    const handleZoomIn = () => {
-        const newZoomScale =
-            zoomScale < MAX_ZOOM_SCALE ? zoomScale + ZOOM_STEP : zoomScale;
-        setZoomScale(newZoomScale);
+    const handleZoomIn = (e: WheelEvent | null = null) => {
+        console.log(
+            'LOG:: Canvas -> handleZoomIn event',
+            e,
+            transformationState.eTranslateX,
+            transformationState.fTranslateY,
+        );
+
+        const foo = (e: WheelEvent, newZoomVal: number) => {
+            console.log(
+                'LOG:: handleZoomIn :: foo',
+                newZoomVal,
+                transformationState.eTranslateX,
+                transformationState.fTranslateY,
+            );
+
+            const translateX =
+                -e.offsetX * dpRatio * (newZoomVal - MIN_ZOOM_SCALE);
+            const translateY =
+                -e.offsetY * dpRatio * (newZoomVal - MIN_ZOOM_SCALE);
+
+            dispatchTransformation({
+                type: TransformationActions.DISPATCH_MULTIPLE,
+                payload: {
+                    translateX: translateX,
+                    translateY: translateY,
+                    scaleX: dpRatio * newZoomVal,
+                    scaleY: dpRatio * newZoomVal,
+                },
+            });
+        };
+
+        setZoomScale((val) => {
+            const newVal = val < MAX_ZOOM_SCALE ? val + ZOOM_STEP : val;
+            e && foo(e, newVal);
+            return newVal;
+        });
     };
 
-    const handleZoomOut = () => {
-        const newZoomScale =
-            zoomScale > MIN_ZOOM_SCALE ? zoomScale - ZOOM_STEP : zoomScale;
-        setZoomScale(newZoomScale);
-        dispatchTransformation({
-            type: TransformationActions.UPDATE_TRANSLATE,
-            payload: {
-                translateX:
-                    transformationState.eTranslateX *
-                    ((newZoomScale - 1) / MAX_ZOOM_SCALE),
-                translateY:
-                    transformationState.fTranslateY *
-                    ((newZoomScale - 1) / MAX_ZOOM_SCALE),
-            },
+    const handleZoomOut = (e: WheelEvent | null = null) => {
+        console.log(
+            'LOG:: Canvas -> handleZoomOut event',
+            e,
+            transformationState.eTranslateX,
+            transformationState.fTranslateY,
+        );
+
+        const foo = (e: WheelEvent, newZoomVal: number) => {
+            console.log(
+                'LOG:: handleZoomOut -> foo event',
+                e.offsetX,
+                e.offsetY,
+            );
+
+            const translateX =
+                -e.offsetX * dpRatio * (newZoomVal - MIN_ZOOM_SCALE);
+            const translateY =
+                -e.offsetY * dpRatio * (newZoomVal - MIN_ZOOM_SCALE);
+
+            dispatchTransformation({
+                type: TransformationActions.DISPATCH_MULTIPLE,
+                payload: {
+                    translateX: translateX,
+                    translateY: translateY,
+                    scaleX: dpRatio * newZoomVal,
+                    scaleY: dpRatio * newZoomVal,
+                },
+            });
+        };
+
+        setZoomScale((val) => {
+            const newZoomScale = val > MIN_ZOOM_SCALE ? val - ZOOM_STEP : val;
+
+            e && foo(e, newZoomScale);
+            return newZoomScale;
         });
     };
 
     const boxes = useMemo(() => {
-        console.warn('LOG:: boxes -> useMemo');
         const boxesCount = getMaxBoxesInRow(
             canvasDimensions.width,
             canvasDimensions.height,
         );
-        return generateBoxes(
+        const generatedBoxes = generateBoxes(
             boxesCount.horizontalBoxesCount,
             boxesCount.verticalBoxesCount,
         );
+
+        console.log('LOG :: useMemo -> generatedBoxes', generatedBoxes.length);
+
+        return generatedBoxes;
     }, [canvasDimensions]);
 
-    const ratio = useMemo(() => {
-        if (!canvasRef.current) {
-            return 1;
+    useEffect(() => {
+        if (canvasRef.current) {
+            const canvasEl = canvasRef.current;
+
+            const dimensions = getObjectFitSize(
+                true,
+                canvasEl.clientWidth,
+                canvasEl.clientHeight,
+                canvasEl.width,
+                canvasEl.height,
+            );
+
+            setCanvasDimensions({
+                height: dimensions.height * dpRatio,
+                width: dimensions.width * dpRatio,
+            });
+
+            requestAnimationFrame(() => {
+                dispatchTransformation({
+                    type: TransformationActions.UPDATE_SCALE,
+                    payload: {
+                        scaleX: dpRatio,
+                        scaleY: dpRatio,
+                    },
+                });
+            });
         }
 
-        const canvasEl = canvasRef.current;
-        return Math.min(
-            (canvasEl.clientWidth / Number(styles.canvasWidth)) * dpRatio,
-            (canvasEl.clientHeight / Number(styles.canvasHeight)) * dpRatio,
-        );
-    }, [canvasRef.current, dpRatio]);
+        if (!wrapperRef.current) return;
+        const wrapperEl = wrapperRef.current;
+        const handleWheel = (e: WheelEvent) => {
+            if (e.deltaY > 0) {
+                handleZoomIn(e);
+            } else {
+                handleZoomOut(e);
+            }
+        };
+        wrapperEl.addEventListener('wheel', handleWheel);
+
+        return () => {
+            wrapperEl.removeEventListener('wheel', handleWheel);
+        };
+    }, [dpRatio]);
 
     useImperativeHandle(
         ref,
@@ -182,8 +283,8 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
             },
             move: (x: number, y: number) => {
                 const [scaledUpWidth, scaledUpHeight] = [
-                    canvasDimensions.width * zoomScale,
-                    canvasDimensions.height * zoomScale,
+                    canvasDimensions.width * zoomScale * dpRatio,
+                    canvasDimensions.height * zoomScale * dpRatio,
                 ];
 
                 const newX = -x + transformationState.eTranslateX;
@@ -207,69 +308,18 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
                 });
             },
             reset: () => {
-                setZoomScale(1);
+                setZoomScale(MIN_ZOOM_SCALE);
                 dispatchTransformation({
                     type: TransformationActions.RESET_MATRIX,
                     payload: {
-                        scaleX: ratio * dpRatio * zoomScale,
-                        scaleY: ratio * dpRatio * zoomScale,
+                        scaleX: dpRatio,
+                        scaleY: dpRatio,
                     },
                 });
             },
         }),
-        [transformationState, zoomScale, dpRatio, ratio],
+        [transformationState, zoomScale, dpRatio],
     );
-
-    useEffect(() => {
-        if (called.current) {
-            return;
-        }
-
-        called.current = true;
-        if (canvasRef.current) {
-            const canvasEl = canvasRef.current;
-
-            const dimensions = getObjectFitSize(
-                true,
-                canvasEl.clientWidth,
-                canvasEl.clientHeight,
-                canvasEl.width,
-                canvasEl.height,
-            );
-
-            setCanvasDimensions({
-                height: dimensions.height * dpRatio,
-                width: dimensions.width * dpRatio,
-            });
-
-            requestAnimationFrame(() => {
-                dispatchTransformation({
-                    type: TransformationActions.UPDATE_SCALE,
-                    payload: {
-                        scaleX: ratio * dpRatio,
-                        scaleY: ratio * dpRatio,
-                    },
-                });
-            });
-        }
-    }, [dpRatio, ratio]);
-
-    useEffect(() => {
-        console.log(
-            'LOG:: Canvas -> zoomScale',
-            zoomScale,
-            ratio,
-            dpRatio,
-            zoomScale * ratio * dpRatio,
-        );
-        dispatchTransformation({
-            type: TransformationActions.UPDATE_SCALE,
-            payload: {
-                scaleX: ratio * dpRatio * zoomScale,
-                scaleY: ratio * dpRatio * zoomScale,
-            },
-        });
-    }, [zoomScale, ratio, dpRatio]);
 
     useEffect(() => {
         applyTransformations();
@@ -306,6 +356,12 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
                 return;
             }
 
+            console.log(
+                'LOG:: Move',
+                transformationState.eTranslateX,
+                transformationState.fTranslateY,
+            );
+
             parentRef.current?.style.setProperty('cursor', 'pointer');
 
             boxes[currentBoxRef.current].fillColor = '';
@@ -340,99 +396,6 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
             transformationState.eTranslateX,
             transformationState.fTranslateY,
         );
-    };
-
-    const handleOnClick: MouseEventHandler<HTMLCanvasElement> = (e) => {
-        if (!canvasRef.current) {
-            return;
-        }
-
-        const clickedBoxIndex = boxes.findIndex((box) => {
-            const x =
-                box.x * zoomScale + transformationState.eTranslateX / dpRatio;
-            const y =
-                box.y * zoomScale + transformationState.fTranslateY / dpRatio;
-
-            const width = box.width * zoomScale;
-            const height = box.height * zoomScale;
-
-            return (
-                e.nativeEvent.offsetX > x &&
-                e.nativeEvent.offsetX < x + width &&
-                e.nativeEvent.offsetY > y &&
-                e.nativeEvent.offsetY < y + height
-            );
-        });
-
-        if (clickedBoxIndex === -1) {
-            return;
-        }
-
-        console.log('LOG:: Canvas -> clickedBoxIndex', clickedBoxIndex);
-
-        const clickedBox = boxes[clickedBoxIndex];
-
-        const scaledX = -clickedBox.x * (MAX_ZOOM_SCALE - 1);
-        const scaledY = -clickedBox.y * (MAX_ZOOM_SCALE - 1);
-
-        const translateX = scaledX;
-        const translateY = scaledY;
-
-        const step = (MAX_ZOOM_SCALE - zoomScale) / ANIMATION_ZOOM_STEP;
-
-        const translateXStep = translateX / step;
-        const translateYStep = translateY / step;
-
-        animationMoveHelper(
-            zoomScale,
-            translateX,
-            translateY,
-            translateXStep,
-            translateYStep,
-            translateXStep,
-            translateYStep,
-        );
-    };
-
-    const animationMoveHelper = (
-        targettedZoomScale: number,
-        targetX: number,
-        targetY: number,
-        stepX: number,
-        stepY: number,
-        currentX: number,
-        currentY: number,
-    ) => {
-        const nextZoomScale = Number(
-            (targettedZoomScale + ANIMATION_ZOOM_STEP).toFixed(2),
-        );
-        const nextX = currentX + stepX;
-        const nextY = currentY + stepY;
-
-        if (nextZoomScale > MAX_ZOOM_SCALE) {
-            return;
-        }
-
-        setZoomScale(nextZoomScale);
-        dispatchTransformation({
-            type: TransformationActions.UPDATE_TRANSLATE,
-            payload: {
-                translateX: nextX,
-                translateY: nextY,
-            },
-        });
-
-        window.requestAnimationFrame(() => {
-            animationMoveHelper(
-                nextZoomScale,
-                targetX,
-                targetY,
-                stepX,
-                stepY,
-                nextX,
-                nextY,
-            );
-        });
     };
 
     const renderBoxes = () => {
@@ -491,14 +454,15 @@ const Canvas = forwardRef<ICanvasApi, IProps>(({ parentRef, dpRatio }, ref) => {
     };
 
     return (
-        <canvas
-            height={canvasDimensions.height}
-            width={canvasDimensions.width}
-            className={styles.canvas}
-            ref={canvasRef}
-            onMouseMove={handleMouseMove}
-            onClick={handleOnClick}
-        ></canvas>
+        <div ref={wrapperRef}>
+            <canvas
+                height={canvasDimensions.height}
+                width={canvasDimensions.width}
+                className={styles.canvas}
+                ref={canvasRef}
+                onMouseMove={handleMouseMove}
+            ></canvas>
+        </div>
     );
 });
 
